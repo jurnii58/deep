@@ -1,0 +1,213 @@
+{
+  "proveedores": [
+    {
+      "id": "p-1",
+      "nombre": "DDTECH",
+      "color": "from-blue-500 to-indigo-600",
+      "diasCredito": 30
+    },
+    {
+      "id": "p-2",
+      "nombre": "SUPERMEX",
+      "color": "from-emerald-500 to-teal-600",
+      "diasCredito": 30
+    },
+    {
+      "id": "p-3",
+      "nombre": "CYBERPUERTA",
+      "color": "from-amber-500 to-orange-600",
+      "diasCredito": 45
+    }
+  ],
+  "marcas": [
+    "DeepCool",
+    "GamerStorm",
+    "Otra",
+    "DeepCool Test"
+  ],
+  "creadores": [
+    {
+      "id": "cr-1",
+      "nombre": "Alondra (UDG Esports)",
+      "alias": "@udg_esports",
+      "redes": {
+        "instagram": "@udg_esports",
+        "twitch": "udg_gaming",
+        "youtube": "UDG Esports"
+      },
+      "telefono": "523314509981",
+      "agencia": "Universidad de Guadalajara",
+      "direccion": "Sede UDG Esports, Guadalajara, Jalisco",
+      "confiabilidad": 95
+    },
+    {
+      "id": "cr-2",
+      "nombre": "Lazaro Capaldi",
+      "alias": "@lazarocapaldi_irl",
+      "redes": {
+        "tiktok": "@lazarocapaldi",
+        "twitch": "lazarocapaldi",
+        "instagram": "@lazarocapaldi_irl"
+      },
+      "telefono": "525539102844",
+      "agencia": "Ingenia",
+      "direccion": "Av. Manuel de la Colina Riquelme 84, CDMX",
+      "confiabilidad": 88
+    },
+    {
+      "id": "cr-3",
+      "nombre": "Carlos \"TechSigma\" Rivera",
+      "alias": "@techsigma_pc",
+      "redes": {
+        "youtube": "TechSigma PC",
+        "tiktok": "@techsigma_pc"
+      },
+      "telefono": "524462135863",
+      "agencia": "Directo",
+      "direccion": "Domicilio Tlacote 130, Querétaro",
+      "confiabilidad": 80
+    }
+  ],
+  "notas": [
+    {
+      "id": "nota-1",
+      "fecha": "19 de Noviembre",
+      "fechaISO": "2026-11-19",
+      "tienda": "DDTECH",
+      "estatusPago": "PENDIENTE",
+      "numeroNC": "",
+      "producto": "R-LM360-WHDMMC-1 (Enfriamiento Líquido Blanco 360mm)",
+      "medio": "PAGO UDG ESPORTS (ALONDRA)",
+      "destinatario": "Alondra (UDG Esports)",
+      "direccion": "Sede UDG Esports, Guadalajara",
+      "telefono": "523314509981",
+      "estatusEnvio": "Pendiente",
+      "esCreador": true,
+      "fechaLimite": "2026-11-25",
+      "linkEvidencia": "",
+      "estatusContenido": "Pendiente",
+      "monto": 2499,
+      "comprobantePago": ""
+    },
+    {
+      "id": "nota-2",
+      "fecha": "19 de Noviembre",
+      "fechaISO": "2026-11-19",
+      "tienda": "SUPERMEX",
+      "estatusPago": "PENDIENTE",
+      "numeroNC": "",
+      "producto": "R-CG580-BKADA4-G-1 (Gabinete Negro)",
+      "medio": "TORNEO HALO",
+      "destinatario": "Genaro Estrada",
+      "direccion": "Domicilio Genaro Estrada 190, W-201",
+      "telefono": "",
+      "estatusEnvio": "Entregado",
+      "esCreador": false,
+      "fechaLimite": "",
+      "linkEvidencia": "",
+      "estatusContenido": "No aplica",
+      "monto": 1899,
+      "comprobantePago": ""
+    },
+    {
+      "id": "nota-3",
+      "fecha": "18 de Noviembre",
+      "fechaISO": "2026-11-18",
+      "tienda": "SUPERMEX",
+      "estatusPago": "PENDIENTE",
+      "numeroNC": "",
+      "producto": "R-LP240-BKMSNC-G-1 (Enfriamiento Líquido 240mm)",
+      "medio": "TORNEO HALO",
+      "destinatario": "Genaro Estrada",
+      "direccion": "Domicilio Genaro Estrada 190, W-201",
+      "telefono": "",
+      "estatusEnvio": "Entregado",
+      "esCreador": false,
+      "fechaLimite": "",
+      "linkEvidencia": "",
+      "estatusContenido": "No aplica",
+      "monto": 2499,
+      "comprobantePago": ""
+    },
+    {
+      "id": "nota-4",
+      "fecha": "16 de Noviembre",
+      "fechaISO": "2026-11-16",
+      "tienda": "SUPERMEX",
+      "estatusPago": "PENDIENTE",
+      "numeroNC": "",
+      "producto": "R-LP240-BKMSNC-G-1 (Enfriamiento Líquido 240mm)",
+      "medio": "TORNEO HALO",
+      "destinatario": "José L. Martínez Hernández",
+      "direccion": "Domicilio José L. Martínez Hernández",
+      "telefono": "523318920683",
+      "estatusEnvio": "Entregado",
+      "esCreador": false,
+      "fechaLimite": "",
+      "linkEvidencia": "",
+      "estatusContenido": "No aplica",
+      "monto": 1899,
+      "comprobantePago": ""
+    },
+    {
+      "id": "nota-5",
+      "fecha": "20 de Noviembre",
+      "fechaISO": "2026-11-20",
+      "tienda": "SUPERMEX",
+      "estatusPago": "PENDIENTE",
+      "numeroNC": "",
+      "producto": "R-LP240-BKMSNC-G-1 (Enfriamiento Líquido 240mm)",
+      "medio": "TORNEO HALO",
+      "destinatario": "Antonio Ruiz Galindo",
+      "direccion": "Domicilio Antonio Ruiz Galindo 42",
+      "telefono": "525541982577",
+      "estatusEnvio": "Entregado",
+      "esCreador": false,
+      "fechaLimite": "",
+      "linkEvidencia": "",
+      "estatusContenido": "No aplica",
+      "monto": 2499,
+      "comprobantePago": ""
+    },
+    {
+      "id": "nota-6",
+      "fecha": "23 de Noviembre",
+      "fechaISO": "2026-11-23",
+      "tienda": "SUPERMEX",
+      "estatusPago": "PENDIENTE",
+      "numeroNC": "",
+      "producto": "R-LP240-BKMSNC-G-1 (Enfriamiento Líquido 240mm)",
+      "medio": "TORNEO HALO",
+      "destinatario": "Ganador Querétaro",
+      "direccion": "Domicilio Tlacote 130, Querétaro",
+      "telefono": "524462135863",
+      "estatusEnvio": "Entregado",
+      "esCreador": false,
+      "fechaLimite": "",
+      "linkEvidencia": "",
+      "estatusContenido": "No aplica",
+      "monto": 1899,
+      "comprobantePago": ""
+    },
+    {
+      "id": "nota-7",
+      "fecha": "14 de Noviembre",
+      "fechaISO": "2026-11-14",
+      "tienda": "SUPERMEX",
+      "estatusPago": "PENDIENTE",
+      "numeroNC": "",
+      "producto": "R-CH560-WHAPE4D-G-1 (Gabinete Blanco)",
+      "medio": "Lazaro Capaldi IRL \"sample Ingenia\"",
+      "destinatario": "Lazaro Capaldi",
+      "direccion": "Domicilio Av. Manuel de la Colina Riquelme 84",
+      "telefono": "525539102844",
+      "estatusEnvio": "Entregado",
+      "esCreador": true,
+      "fechaLimite": "2026-11-28",
+      "linkEvidencia": "",
+      "estatusContenido": "Pendiente",
+      "monto": 2499,
+      "comprobantePago": ""
+    }
+  ]
+}
