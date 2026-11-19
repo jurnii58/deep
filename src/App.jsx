@@ -218,6 +218,31 @@ function IconHardwareBox({ className = "w-4 h-4" }) {
   );
 }
 
+// Iconos Exclusivos para Perfiles de Acceso Corporativo DeepCool (Sin Emojis)
+function IconRoleMarketing({ className = "w-4 h-4" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 18h16" />
+      <path d="M4 18l1.8-9.5 4.2 3.8 2-6.3 2 6.3 4.2-3.8L20 18H4z" fill="currentColor" fillOpacity="0.12" />
+      <circle cx="12" cy="6" r="1.3" fill="#008C8C" stroke="none" />
+      <circle cx="5.8" cy="8.5" r="1.1" fill="#008C8C" stroke="none" />
+      <circle cx="18.2" cy="8.5" r="1.1" fill="#008C8C" stroke="none" />
+    </svg>
+  );
+}
+
+function IconRoleOperaciones({ className = "w-4 h-4" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" fill="currentColor" fillOpacity="0.12" />
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+      <line x1="12" y1="22.08" x2="12" y2="12" />
+      <path d="M9 4.8l6 3.4" stroke="#008C8C" strokeWidth="1.6" />
+      <circle cx="12" cy="16" r="1.3" fill="#008C8C" stroke="none" />
+    </svg>
+  );
+}
+
 // Mini DatePicker Didáctico y Elegante (Estilo Minimalista DeepCool)
 function MiniDatePicker({ valueISO, onChange, label, placeholder = 'Seleccionar fecha' }) {
   const [open, setOpen] = useState(false);
@@ -1107,32 +1132,42 @@ export default function App() {
           </form>
 
           {/* Perfiles de Acceso Rápido para Demostración */}
-          <div className="pt-4 border-t border-slate-100 space-y-2">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block text-center">
+          <div className="pt-4 border-t border-slate-100 space-y-2.5">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block text-center">
               Perfiles de Acceso Rápido
             </span>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
                 onClick={() => handleLogin(null, 'marketing@deepcool.com', 'DeepCool2026!')}
-                className="p-2.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-[#E6F4F4] hover:border-[#008C8C] text-left transition group"
+                className="p-2.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-[#E6F4F4]/60 hover:border-[#008C8C] text-left transition group flex items-center gap-2.5 shadow-2xs"
               >
-                <span className="text-[11px] font-bold text-slate-800 group-hover:text-[#008C8C] block truncate">
-                  👑 Marketing LATAM
-                </span>
-                <span className="text-[10px] text-slate-500">Dirección</span>
+                <div className="w-8 h-8 rounded-lg bg-white group-hover:bg-[#008C8C] text-[#008C8C] group-hover:text-white border border-slate-200/80 group-hover:border-[#008C8C] flex items-center justify-center shrink-0 transition shadow-2xs">
+                  <IconRoleMarketing className="w-4 h-4 transition" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold text-slate-800 group-hover:text-[#008C8C] block truncate leading-tight">
+                    Marketing LATAM
+                  </span>
+                  <span className="text-[10px] text-slate-500 block truncate">Dirección</span>
+                </div>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleLogin(null, 'operaciones@deepcool.com', 'Logistica2026!')}
-                className="p-2.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-[#E6F4F4] hover:border-[#008C8C] text-left transition group"
+                className="p-2.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-[#E6F4F4]/60 hover:border-[#008C8C] text-left transition group flex items-center gap-2.5 shadow-2xs"
               >
-                <span className="text-[11px] font-bold text-slate-800 group-hover:text-[#008C8C] block truncate">
-                  📦 Operaciones
-                </span>
-                <span className="text-[10px] text-slate-500">Logística & Envíos</span>
+                <div className="w-8 h-8 rounded-lg bg-white group-hover:bg-[#008C8C] text-[#008C8C] group-hover:text-white border border-slate-200/80 group-hover:border-[#008C8C] flex items-center justify-center shrink-0 transition shadow-2xs">
+                  <IconRoleOperaciones className="w-4 h-4 transition" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold text-slate-800 group-hover:text-[#008C8C] block truncate leading-tight">
+                    Operaciones
+                  </span>
+                  <span className="text-[10px] text-slate-500 block truncate">Logística & Envíos</span>
+                </div>
               </button>
             </div>
           </div>
@@ -1557,10 +1592,11 @@ export default function App() {
                               {item.creadores.slice(0, 1).map((c) => (
                                 <div
                                   key={`cr-${c.id}`}
-                                  className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 truncate"
+                                  className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 truncate flex items-center gap-1"
                                   title={`Límite Video: ${c.destinatario}`}
                                 >
-                                  🎬 {c.destinatario}
+                                  <Video className="w-2.5 h-2.5 shrink-0 text-rose-600" />
+                                  <span className="truncate">{c.destinatario}</span>
                                 </div>
                               ))}
                             </div>
