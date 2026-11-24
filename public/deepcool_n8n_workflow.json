@@ -1,0 +1,251 @@
+{
+  "name": "DeepCool LATAM - Recordatorios de Creadores & WhatsApp (Evolution API)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "e96f1d24-38b8-4c11-9a99-b1d55e810a01",
+      "name": "Disparador Diario 9:00 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://deepcool-control-latam.onrender.com/api/n8n/pendientes",
+        "options": {}
+      },
+      "id": "c42b7812-4211-4091-8cb2-aa77bb219810",
+      "name": "Consultar Pendientes DeepCool",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "5f1107c1-ea5e-4c7b-b5b6-2a6288cd723a",
+      "name": "Iterar Cada Creador",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.tipoAlerta }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "vencido_retraso",
+              "outputKey": "Vencido"
+            },
+            {
+              "value2": "vence_hoy",
+              "outputKey": "Vence Hoy"
+            },
+            {
+              "value2": "preventivo_3_dias",
+              "outputKey": "Preventivo 3 Días"
+            }
+          ]
+        }
+      },
+      "id": "31b9d7ef-9a08-4e89-8d69-cb1495e28a50",
+      "name": "Clasificar Urgencia",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [
+        940,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.EVOLUTION_API_URL || 'https://tu-evolution-api.com') + '/message/sendText/' + ($env.EVOLUTION_INSTANCE || 'deepcool') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.EVOLUTION_API_KEY || 'TU_API_KEY' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.telefonoFormateado }}\",\n  \"options\": {\n    \"delay\": 1200,\n    \"presence\": \"composing\",\n    \"linkPreview\": false\n  },\n  \"textMessage\": {\n    \"text\": \"{{ $json.mensajeWhatsApp }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "2195f261-0f62-4f3a-9e1e-28956972986f",
+      "name": "Enviar WhatsApp (Evolution API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://deepcool-control-latam.onrender.com/api/automatizaciones/registrar-envio",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"notaId\": \"{{ $json.id }}\",\n  \"creador\": \"{{ $json.creador }}\",\n  \"telefono\": \"{{ $json.telefonoFormateado }}\",\n  \"tipoAlerta\": \"{{ $json.tipoAlerta }}\",\n  \"canal\": \"n8n_evolution_api\",\n  \"mensaje\": \"{{ $json.mensajeWhatsApp }}\"\n}",
+        "options": {}
+      },
+      "id": "8935cbb2-16ad-4560-bf64-ffea5c378912",
+      "name": "Registrar en Auditoría DeepCool",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "deepcool-recibir-video",
+        "options": {}
+      },
+      "id": "a9844e13-5813-4315-a740-4c3111b01c3d",
+      "name": "Webhook Receptor de Videos",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        600
+      ],
+      "webhookId": "7303e659-1983-4927-a068-085e3328e100"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://deepcool-control-latam.onrender.com/api/automatizaciones/webhook-entrega",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"telefono\": \"{{ $json.body.data.key.remoteJid || $json.body.sender }}\",\n  \"mensajeOriginal\": \"{{ $json.body.data.message.conversation || $json.body.data.message.extendedTextMessage.text }}\",\n  \"linkEvidencia\": \"{{ $json.body.link }}\"\n}",
+        "options": {}
+      },
+      "id": "6732cf8e-ba69-4f76-80f0-c521eb831103",
+      "name": "Validar y Actualizar a Entregado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        600
+      ]
+    }
+  ],
+  "connections": {
+    "Disparador Diario 9:00 AM": {
+      "main": [
+        [
+          {
+            "node": "Consultar Pendientes DeepCool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar Pendientes DeepCool": {
+      "main": [
+        [
+          {
+            "node": "Iterar Cada Creador",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Iterar Cada Creador": {
+      "main": [
+        [
+          {
+            "node": "Clasificar Urgencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clasificar Urgencia": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp (Evolution API)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar WhatsApp (Evolution API)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar WhatsApp (Evolution API)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp (Evolution API)": {
+      "main": [
+        [
+          {
+            "node": "Registrar en Auditoría DeepCool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Receptor de Videos": {
+      "main": [
+        [
+          {
+            "node": "Validar y Actualizar a Entregado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

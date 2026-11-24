@@ -38,7 +38,15 @@ import {
   FileText,
   LogOut,
   User,
-  Lock
+  Lock,
+  Send,
+  MessageSquare,
+  Settings,
+  Copy,
+  Radio,
+  Zap,
+  History,
+  FileCode
 } from 'lucide-react';
 
 const formatMoney = (val) =>
@@ -506,6 +514,20 @@ export default function App() {
   // Calendario Didáctico Sincronizado en Tiempo Real
   const [currentCalendarDate, setCurrentCalendarDate] = useState(() => new Date());
 
+  // Automatizaciones & WhatsApp CRM
+  const [notificacionesHistorial, setNotificacionesHistorial] = useState([]);
+  const [evolutionConfig, setEvolutionConfig] = useState({
+    apiUrl: '',
+    apiKey: '',
+    instanceName: '',
+    autoSend: false
+  });
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [activeAutoSubTab, setActiveAutoSubTab] = useState('pendientes');
+  const [filtroAlertaAuto, setFiltroAlertaAuto] = useState('TODOS');
+  const [modalMensajePreview, setModalMensajePreview] = useState(null);
+  const [sendingEvolution, setSendingEvolution] = useState(false);
+
   // Formulario Nueva Nota
   const [formData, setFormData] = useState({
     marca: 'DeepCool',
@@ -621,7 +643,168 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
+    fetchAutomatizacionesData();
   }, []);
+
+  const fetchAutomatizacionesData = async () => {
+    try {
+      const [resH, resC] = await Promise.all([
+        fetch('/api/automatizaciones/historial'),
+        fetch('/api/automatizaciones/config-evolution')
+      ]);
+      const jsonH = await resH.json();
+      const jsonC = await resC.json();
+      if (jsonH.ok) setNotificacionesHistorial(jsonH.data || []);
+      if (jsonC.ok && jsonC.data) setEvolutionConfig(jsonC.data);
+    } catch (err) {
+      console.error('Error cargando historial de automatizaciones:', err);
+    }
+  };
+
+  const formatTelWa = (tel) => {
+    if (!tel) return '';
+    const clean = String(tel).replace(/\D/g, '');
+    if (clean.startsWith('52') && (clean.length === 12 || clean.length === 13)) return clean;
+    if (clean.length === 10) return `52${clean}`;
+    return clean;
+  };
+
+  const generarMensajeRecordatorio = (nota, tipoAlerta) => {
+    const creador = nota.destinatario || 'Creador(a)';
+    const producto = nota.producto || 'hardware DeepCool';
+    const fecha = nota.fechaLimite || 'la fecha acordada';
+    const guia = nota.guiaEnvio || 'En proceso de asignación';
+    const paqueteria = nota.paqueteria || 'Paquetería asignada';
+
+    if (tipoAlerta === 'guia_despacho') {
+      return `¡Hola ${creador}! Te saludamos del equipo de Marketing de DeepCool LATAM. Tu producto (${producto}) va en camino 📦\n\n• Paquetería: ${paqueteria}\n• Guía de rastreo: ${guia}\n• Fecha límite acordada para tu video: ${fecha}\n\nQuedamos atentos a cualquier duda con la entrega o el ensamble. ¡Mucho éxito con el contenido!`;
+    }
+    if (tipoAlerta === 'preventivo_3_dias') {
+      return `¡Hola ${creador}! Esperamos que estés disfrutando el ${producto} de DeepCool. Te recordamos amablemente que tu fecha límite para publicar la colaboración es este ${fecha} (faltan pocos días). Si requieres material gráfico oficial o spec sheets, avísanos con confianza. ¡Saludos!`;
+    }
+    if (tipoAlerta === 'vence_hoy') {
+      return `¡Hola ${creador}! Te saludamos de DeepCool LATAM. Hoy (${fecha}) es la fecha pactada para la publicación de tu contenido sobre ${producto}. Por favor, en cuanto tu video o post esté disponible, compártenos el enlace para registrar tu colaboración en nuestro sistema. ¡Muchas gracias!`;
+    }
+    if (tipoAlerta === 'vencido_retraso') {
+      return `Hola ${creador}, te escribimos de la Dirección de Marketing de DeepCool LATAM para dar seguimiento a la colaboración de ${producto}, cuya fecha estimada era el ${fecha}. ¿Tuviste algún contratiempo con la edición o necesitas apoyo adicional? Por favor compártenos una actualización para mantener tu perfil al día. ¡Quedamos atentos!`;
+    }
+    return `Hola ${creador}, te saludamos de DeepCool LATAM respecto a tu colaboración con el producto ${producto}. Quedamos atentos a tus comentarios.`;
+  };
+
+  const alertasCreadores = useMemo(() => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const notas = data.notas || [];
+    const list = [];
+
+    notas
+      .filter((n) => n.esCreador && n.estatusContenido !== 'Entregado')
+      .forEach((n) => {
+        let alerta = 'en_tiempo';
+        let diffDias = 999;
+        if (n.fechaLimite) {
+          const [y, m, d] = n.fechaLimite.split('-').map(Number);
+          const target = new Date(y, m - 1, d);
+          target.setHours(0, 0, 0, 0);
+          diffDias = Math.round((target.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
+
+          if (diffDias < 0) alerta = 'vencido_retraso';
+          else if (diffDias === 0) alerta = 'vence_hoy';
+          else if (diffDias <= 3) alerta = 'preventivo_3_dias';
+        }
+
+        list.push({
+          nota: n,
+          diffDias,
+          tipoAlerta: alerta,
+          tieneGuia: Boolean(n.guiaEnvio && n.estatusEnvio !== 'Entregado')
+        });
+      });
+
+    list.sort((a, b) => a.diffDias - b.diffDias);
+    return list;
+  }, [data.notas]);
+
+  const handleGuardarConfigEvolution = async (e) => {
+    e.preventDefault();
+    setSavingConfig(true);
+    try {
+      const res = await fetch('/api/automatizaciones/config-evolution', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(evolutionConfig)
+      });
+      const json = await res.json();
+      if (json.ok) {
+        notify('Configuración de Evolution API guardada');
+        setEvolutionConfig(json.data);
+      }
+    } catch {
+      notify('Error al guardar configuración');
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  const handleDispararWhatsAppDirecto = async (nota, tipoAlerta, customMsg = null) => {
+    const rawTel = nota.telefono || '';
+    const cleanTel = formatTelWa(rawTel);
+    if (!cleanTel) {
+      notify('El creador no tiene teléfono registrado');
+      return;
+    }
+    const msg = customMsg || generarMensajeRecordatorio(nota, tipoAlerta);
+    const waUrl = `https://wa.me/${cleanTel}?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, '_blank');
+
+    try {
+      await fetch('/api/automatizaciones/registrar-envio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          notaId: nota.id,
+          creador: nota.destinatario,
+          telefono: cleanTel,
+          tipoAlerta,
+          canal: 'whatsapp_directo',
+          mensaje: msg
+        })
+      });
+      fetchAutomatizacionesData();
+      notify('WhatsApp abierto · Notificación registrada en auditoría');
+    } catch {
+      notify('WhatsApp abierto');
+    }
+    if (modalMensajePreview) setModalMensajePreview(null);
+  };
+
+  const handleEnviarEvolutionSegundoPlano = async (nota, tipoAlerta, customMsg = null) => {
+    setSendingEvolution(true);
+    try {
+      const res = await fetch('/api/automatizaciones/enviar-evolution', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          notaId: nota.id,
+          tipoAlerta,
+          mensajePersonalizado: customMsg
+        })
+      });
+      const json = await res.json();
+      if (json.ok) {
+        notify(json.simulado ? 'Mensaje registrado en modo prueba (Evolution API)' : 'Mensaje enviado vía Evolution API');
+        fetchAutomatizacionesData();
+        if (modalMensajePreview) setModalMensajePreview(null);
+      } else {
+        notify(json.error || 'Error al enviar por Evolution API');
+      }
+    } catch (err) {
+      notify('Error comunicando con Evolution API');
+    } finally {
+      setSendingEvolution(false);
+    }
+  };
 
   // Cálculos Financieros y Estadísticas para Módulos 01 y 05
   const kpis = useMemo(() => {
@@ -2121,44 +2304,510 @@ export default function App() {
           )}
 
           {/* =======================================================
-              MÓDULO 04: AUTOMATIZACIONES (MONITOR n8n)
+              MÓDULO 04: AUTOMATIZACIONES (WHATSAPP, n8n & EVOLUTION API)
              ======================================================= */}
           {activeTab === 'automatizaciones' && (
             <div className="space-y-6">
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <Bot className="w-4 h-4 text-[#008C8C]" />
-                  <span>Monitor de Automatizaciones n8n & Recordatorios</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Los recordatorios automáticos corren vía n8n consultando el endpoint <code className="bg-slate-100 text-[#008C8C] px-1.5 py-0.5 rounded font-mono text-[11px]">/api/n8n/pendientes</code>
-                </p>
-              </div>
+              {/* Header Principal */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <IconNavAutomations className="w-4 h-4 text-[#008C8C]" />
+                    <span>Centro de Automatizaciones & CRM WhatsApp</span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Recordatorios automáticos a creadores, trazabilidad de envíos y sincronización con n8n & Evolution API.
+                  </p>
+                </div>
 
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4">
-                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Entregas de Video Pendientes de Notificar
-                </h4>
-
-                <div className="space-y-2">
-                  {(data.notas || [])
-                    .filter((n) => n.esCreador && n.estatusContenido !== 'Entregado')
-                    .map((item) => (
-                      <div
-                        key={item.id}
-                        className="p-3 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between text-xs"
-                      >
-                        <div>
-                          <span className="font-bold text-slate-900 block">{item.destinatario}</span>
-                          <span className="text-slate-500">{item.producto} · Límite: {item.fechaLimite || 'Próximo'}</span>
-                        </div>
-                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200">
-                          Pendiente de Video
-                        </span>
-                      </div>
-                    ))}
+                <div className="flex items-center gap-2">
+                  <a
+                    href="/deepcool_n8n_workflow.json"
+                    download="deepcool_n8n_workflow.json"
+                    className="px-3 py-1.5 bg-[#E6F4F4] hover:bg-[#D5EFEF] text-[#008C8C] rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Descargar n8n (.json)</span>
+                  </a>
                 </div>
               </div>
+
+              {/* Indicadores KPI de Automatizaciones */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Retrasos Críticos (+2d)
+                  </span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold font-mono text-rose-600">
+                      {alertasCreadores.filter((a) => a.tipoAlerta === 'vencido_retraso').length}
+                    </span>
+                    <span className="text-[10px] text-rose-600 font-semibold">Requieren cobro</span>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Vencen Hoy (D-0)
+                  </span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold font-mono text-amber-600">
+                      {alertasCreadores.filter((a) => a.tipoAlerta === 'vence_hoy').length}
+                    </span>
+                    <span className="text-[10px] text-amber-600 font-semibold">Fecha límite</span>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Preventivos (D-3)
+                  </span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold font-mono text-[#008C8C]">
+                      {alertasCreadores.filter((a) => a.tipoAlerta === 'preventivo_3_dias').length}
+                    </span>
+                    <span className="text-[10px] text-[#008C8C] font-semibold">Próximos</span>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Notificaciones Enviadas
+                  </span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold font-mono text-slate-800">
+                      {notificacionesHistorial.length}
+                    </span>
+                    <span className="text-[10px] text-emerald-600 font-semibold">En auditoría</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pestañas Secundarias (Sub-tabs) */}
+              <div className="flex border-b border-slate-200 gap-1 text-xs font-semibold overflow-x-auto pb-1">
+                <button
+                  onClick={() => setActiveAutoSubTab('pendientes')}
+                  className={`px-4 py-2 rounded-lg transition shrink-0 flex items-center gap-1.5 ${
+                    activeAutoSubTab === 'pendientes'
+                      ? 'bg-[#008C8C] text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Recordatorios Pendientes ({alertasCreadores.length})</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveAutoSubTab('historial')}
+                  className={`px-4 py-2 rounded-lg transition shrink-0 flex items-center gap-1.5 ${
+                    activeAutoSubTab === 'historial'
+                      ? 'bg-[#008C8C] text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <History className="w-3.5 h-3.5" />
+                  <span>Historial & Auditoría ({notificacionesHistorial.length})</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveAutoSubTab('config')}
+                  className={`px-4 py-2 rounded-lg transition shrink-0 flex items-center gap-1.5 ${
+                    activeAutoSubTab === 'config'
+                      ? 'bg-[#008C8C] text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>Conexión Evolution API</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveAutoSubTab('n8n_guide')}
+                  className={`px-4 py-2 rounded-lg transition shrink-0 flex items-center gap-1.5 ${
+                    activeAutoSubTab === 'n8n_guide'
+                      ? 'bg-[#008C8C] text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <FileCode className="w-3.5 h-3.5" />
+                  <span>Workflow n8n (.json)</span>
+                </button>
+              </div>
+
+              {/* SUB-TAB 1: RECORDATORIOS PENDIENTES */}
+              {activeAutoSubTab === 'pendientes' && (
+                <div className="space-y-4">
+                  {/* Filtros de Alerta */}
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex gap-1.5 text-[11px] font-semibold">
+                      {[
+                        { id: 'TODOS', label: 'Todos' },
+                        { id: 'vencido_retraso', label: '🔴 Retrasos (+2d)' },
+                        { id: 'vence_hoy', label: '🟠 Vencen Hoy (D-0)' },
+                        { id: 'preventivo_3_dias', label: '🟡 Preventivos (D-3)' },
+                        { id: 'guias', label: '📦 Con Guía de Envío' }
+                      ].map((f) => (
+                        <button
+                          key={f.id}
+                          onClick={() => setFiltroAlertaAuto(f.id)}
+                          className={`px-3 py-1 rounded-full transition ${
+                            filtroAlertaAuto === f.id
+                              ? 'bg-[#008C8C] text-white'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <span className="text-xs text-slate-400">
+                      1 Clic en WhatsApp para disparar mensaje con plantilla oficial
+                    </span>
+                  </div>
+
+                  {/* Listado de Creadores y Acciones */}
+                  <div className="grid grid-cols-1 gap-3">
+                    {alertasCreadores
+                      .filter((item) => {
+                        if (filtroAlertaAuto === 'vencido_retraso') return item.tipoAlerta === 'vencido_retraso';
+                        if (filtroAlertaAuto === 'vence_hoy') return item.tipoAlerta === 'vence_hoy';
+                        if (filtroAlertaAuto === 'preventivo_3_dias') return item.tipoAlerta === 'preventivo_3_dias';
+                        if (filtroAlertaAuto === 'guias') return item.tieneGuia;
+                        return true;
+                      })
+                      .map((item) => {
+                        const { nota, tipoAlerta, diffDias, tieneGuia } = item;
+                        const msgSugerido = generarMensajeRecordatorio(nota, tipoAlerta);
+
+                        let badgeColor = 'bg-slate-100 text-slate-700 border-slate-200';
+                        let badgeTexto = 'EN TIEMPO';
+                        if (tipoAlerta === 'vencido_retraso') {
+                          badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
+                          badgeTexto = `VENCIDO (${Math.abs(diffDias)} días de retraso)`;
+                        } else if (tipoAlerta === 'vence_hoy') {
+                          badgeColor = 'bg-amber-50 text-amber-700 border-amber-200';
+                          badgeTexto = 'VENCE HOY (D-0)';
+                        } else if (tipoAlerta === 'preventivo_3_dias') {
+                          badgeColor = 'bg-[#E6F4F4] text-[#008C8C] border-[#008C8C]/30';
+                          badgeTexto = `PRÓXIMO A VENCER (${diffDias} días restantes)`;
+                        }
+
+                        return (
+                          <div
+                            key={nota.id}
+                            className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs hover:border-[#008C8C]/40 transition space-y-3"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgeColor}`}>
+                                  {badgeTexto}
+                                </span>
+                                <span className="font-bold text-sm text-slate-900">{nota.destinatario}</span>
+                                {nota.telefono && (
+                                  <span className="text-xs font-mono text-slate-400">+{nota.telefono}</span>
+                                )}
+                              </div>
+
+                              <div className="text-xs text-slate-500 flex items-center gap-2">
+                                <span>Límite: <strong className="text-slate-700">{nota.fechaLimite || 'Por definir'}</strong></span>
+                                <span className="text-slate-300">·</span>
+                                <span className="font-mono">{nota.tienda}</span>
+                              </div>
+                            </div>
+
+                            {/* Detalles del Producto y Envío */}
+                            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
+                              <div>
+                                <span className="text-slate-500">Hardware Asignado: </span>
+                                <span className="font-bold text-slate-800">{nota.producto}</span>
+                              </div>
+
+                              {nota.guiaEnvio && (
+                                <div className="flex items-center gap-2 font-mono text-[11px] text-slate-600">
+                                  <span>📦 {nota.paqueteria || 'Paq'}:</span>
+                                  <span className="bg-white px-2 py-0.5 rounded border border-slate-200 font-bold">{nota.guiaEnvio}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Previsualización resumida del mensaje */}
+                            <div className="text-[11px] text-slate-600 italic bg-white p-2.5 rounded-lg border border-slate-100 line-clamp-2">
+                              "{msgSugerido}"
+                            </div>
+
+                            {/* Botonera de Acciones Inmediatas */}
+                            <div className="flex flex-wrap items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setModalMensajePreview({
+                                    nota,
+                                    tipoAlerta,
+                                    mensaje: msgSugerido,
+                                    telefono: nota.telefono
+                                  })
+                                }
+                                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition"
+                              >
+                                <Edit3 className="w-3.5 h-3.5 text-slate-500" />
+                                <span>Revisar / Personalizar</span>
+                              </button>
+
+                              {tieneGuia && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDispararWhatsAppDirecto(nota, 'guia_despacho')}
+                                  className="px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold flex items-center gap-1.5 transition"
+                                >
+                                  <Package className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Notificar Guía 📦</span>
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => handleEnviarEvolutionSegundoPlano(nota, tipoAlerta)}
+                                disabled={sendingEvolution}
+                                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition"
+                                title="Enviar en segundo plano vía Evolution API"
+                              >
+                                <Zap className="w-3.5 h-3.5 text-amber-500" />
+                                <span>Evolution API</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDispararWhatsAppDirecto(nota, tipoAlerta)}
+                                className="px-3.5 py-1.5 rounded-lg bg-[#25D366] hover:bg-[#20BD5A] text-white text-xs font-bold flex items-center gap-1.5 transition shadow-2xs"
+                              >
+                                <IconWhatsApp className="w-3.5 h-3.5" />
+                                <span>WhatsApp 1-Clic</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                    {alertasCreadores.length === 0 && (
+                      <div className="p-8 text-center bg-white rounded-xl border border-slate-200 text-xs text-slate-500">
+                        ✓ No hay creadores pendientes de recordatorio en este momento.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* SUB-TAB 2: HISTORIAL Y AUDITORÍA */}
+              {activeAutoSubTab === 'historial' && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+                  <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                        Registro de Auditoría de Notificaciones
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Cada recordatorio disparado vía WhatsApp Web, Evolution API o n8n queda registrado aquí para control de Dirección.
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={fetchAutomatizacionesData}
+                      className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition"
+                      title="Actualizar registro"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                        <tr>
+                          <th className="py-2.5 px-3">Fecha y Hora</th>
+                          <th className="py-2.5 px-3">Destinatario</th>
+                          <th className="py-2.5 px-3">Teléfono</th>
+                          <th className="py-2.5 px-3">Tipo de Alerta</th>
+                          <th className="py-2.5 px-3">Canal</th>
+                          <th className="py-2.5 px-3">Estatus</th>
+                          <th className="py-2.5 px-3">Mensaje Enviado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {notificacionesHistorial.map((log) => (
+                          <tr key={log.id} className="hover:bg-slate-50/60 transition">
+                            <td className="py-2 px-3 text-slate-500 font-mono text-[11px] whitespace-nowrap">
+                              {log.timestamp ? new Date(log.timestamp).toLocaleString('es-MX') : '—'}
+                            </td>
+                            <td className="py-2 px-3 font-bold text-slate-800">
+                              {log.creador}
+                            </td>
+                            <td className="py-2 px-3 font-mono text-slate-500 text-[11px]">
+                              +{log.telefono}
+                            </td>
+                            <td className="py-2 px-3">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                                {log.tipoAlerta}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 font-mono text-[10px] text-slate-600">
+                              {log.canal}
+                            </td>
+                            <td className="py-2 px-3">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                {log.estatus || 'ENVIADO'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-slate-500 text-[11px] max-w-xs truncate" title={log.mensaje}>
+                              {log.mensaje}
+                            </td>
+                          </tr>
+                        ))}
+
+                        {notificacionesHistorial.length === 0 && (
+                          <tr>
+                            <td colSpan="7" className="py-6 text-center text-slate-400">
+                              No hay registros de notificaciones en el historial.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* SUB-TAB 3: CONFIGURACIÓN EVOLUTION API */}
+              {activeAutoSubTab === 'config' && (
+                <div className="max-w-2xl bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-5">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <Settings className="w-4 h-4 text-[#008C8C]" />
+                      <span>Configuración de Evolution API (Baileys)</span>
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Evolution API permite enviar mensajes de WhatsApp de forma autónoma en segundo plano sin cobrar tarifas por plantilla de Meta.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleGuardarConfigEvolution} className="space-y-4 text-xs">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        URL de tu Servidor Evolution API
+                      </label>
+                      <input
+                        type="url"
+                        value={evolutionConfig.apiUrl || ''}
+                        onChange={(e) => setEvolutionConfig({ ...evolutionConfig, apiUrl: e.target.value })}
+                        placeholder="https://evolution.tudominio.com"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-[#008C8C]/20 focus:border-[#008C8C]"
+                      />
+                      <span className="text-[10px] text-slate-400 block mt-1">
+                        La URL pública o interna donde corre tu contenedor de Evolution API.
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          API Key (Global o de Instancia)
+                        </label>
+                        <input
+                          type="password"
+                          value={evolutionConfig.apiKey || ''}
+                          onChange={(e) => setEvolutionConfig({ ...evolutionConfig, apiKey: e.target.value })}
+                          placeholder="••••••••••••••••"
+                          className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-[#008C8C]/20 focus:border-[#008C8C]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Nombre de la Instancia
+                        </label>
+                        <input
+                          type="text"
+                          value={evolutionConfig.instanceName || ''}
+                          onChange={(e) => setEvolutionConfig({ ...evolutionConfig, instanceName: e.target.value })}
+                          placeholder="deepcool-marketing"
+                          className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-[#008C8C]/20 focus:border-[#008C8C]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-xs text-slate-500">
+                        {evolutionConfig.apiUrl ? '✓ Servidor configurado' : 'Operando en modo simulación'}
+                      </span>
+
+                      <button
+                        type="submit"
+                        disabled={savingConfig}
+                        className="px-5 py-2 bg-[#008C8C] hover:bg-[#007A7A] disabled:opacity-50 text-white font-bold rounded-lg transition shadow-xs flex items-center gap-1.5"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>{savingConfig ? 'Guardando...' : 'Guardar Configuración'}</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* SUB-TAB 4: GUÍA Y WORKFLOW n8n */}
+              {activeAutoSubTab === 'n8n_guide' && (
+                <div className="space-y-6">
+                  {/* Tarjeta de Descarga */}
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                          <Download className="w-4 h-4 text-[#008C8C]" />
+                          <span>Descargar Flujo Completo para n8n</span>
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Archivo JSON preconfigurado con cron diario a las 9:00 AM, consulta de pendientes y envío de WhatsApp.
+                        </p>
+                      </div>
+
+                      <a
+                        href="/deepcool_n8n_workflow.json"
+                        download="deepcool_n8n_workflow.json"
+                        className="px-4 py-2.5 bg-[#008C8C] hover:bg-[#007A7A] text-white rounded-lg text-xs font-bold transition flex items-center gap-2 shadow-xs shrink-0"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Descargar deepcool_n8n_workflow.json</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Endpoints de Integración */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                      <span className="font-bold text-slate-800 block uppercase tracking-wider text-[11px]">
+                        1. Endpoint de Consulta de Pendientes (GET)
+                      </span>
+                      <p className="text-slate-500">
+                        n8n consulta este webhook cada mañana para obtener la lista de creadores con mensaje ya formateado.
+                      </p>
+                      <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-mono text-[11px] text-[#008C8C] break-all select-all">
+                        /api/n8n/pendientes
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                      <span className="font-bold text-slate-800 block uppercase tracking-wider text-[11px]">
+                        2. Webhook Receptor de Videos (POST)
+                      </span>
+                      <p className="text-slate-500">
+                        Cuando un creador responde a WhatsApp con un link de YouTube o TikTok, n8n lo reenvía aquí para marcarlo como Entregado.
+                      </p>
+                      <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-mono text-[11px] text-[#008C8C] break-all select-all">
+                        /api/automatizaciones/webhook-entrega
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -2248,6 +2897,101 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {/* =======================================================
+          MODAL: PREVISUALIZAR Y EDITAR MENSAJE WHATSAPP
+         ======================================================= */}
+      {modalMensajePreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-xl w-full shadow-2xl space-y-4 text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <IconWhatsApp className="w-4 h-4 text-[#25D366]" />
+                <h3 className="font-bold text-sm text-slate-900">
+                  Previsualizar Mensaje para {modalMensajePreview.nota.destinatario}
+                </h3>
+              </div>
+              <button
+                onClick={() => setModalMensajePreview(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+              <div>
+                <span className="text-slate-500 block text-[11px]">Destinatario & Teléfono:</span>
+                <span className="font-bold text-slate-800">
+                  {modalMensajePreview.nota.destinatario} (+{formatTelWa(modalMensajePreview.nota.telefono)})
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[11px]">Hardware:</span>
+                <span className="font-medium text-slate-700">{modalMensajePreview.nota.producto}</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Texto del Mensaje (puedes personalizarlo antes de enviar):
+              </label>
+              <textarea
+                rows="6"
+                value={modalMensajePreview.mensaje}
+                onChange={(e) =>
+                  setModalMensajePreview({
+                    ...modalMensajePreview,
+                    mensaje: e.target.value
+                  })
+                }
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-slate-900 font-sans text-xs focus:outline-none focus:ring-2 focus:ring-[#008C8C]/20 focus:border-[#008C8C]"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setModalMensajePreview(null)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-semibold"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleEnviarEvolutionSegundoPlano(
+                    modalMensajePreview.nota,
+                    modalMensajePreview.tipoAlerta,
+                    modalMensajePreview.mensaje
+                  )
+                }
+                disabled={sendingEvolution}
+                className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg font-bold transition flex items-center gap-1.5"
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-500" />
+                <span>Enviar vía Evolution API</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleDispararWhatsAppDirecto(
+                    modalMensajePreview.nota,
+                    modalMensajePreview.tipoAlerta,
+                    modalMensajePreview.mensaje
+                  )
+                }
+                className="px-4 py-2 bg-[#25D366] hover:bg-[#20BD5A] text-white rounded-lg font-bold shadow-xs transition flex items-center gap-1.5"
+              >
+                <IconWhatsApp className="w-3.5 h-3.5" />
+                <span>Abrir WhatsApp (1-Clic)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* =======================================================
           MODAL: NUEVA SALIDA / NOTA DE TIENDA

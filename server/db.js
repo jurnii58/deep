@@ -219,7 +219,37 @@ const initialDatabase = {
       linkEvidencia: '',
       estatusContenido: 'Pendiente'
     }
-  ]
+  ],
+  notificacionesLog: [
+    {
+      id: 'log-1',
+      notaId: 'nota-1',
+      creador: 'Alondra (UDG Esports)',
+      telefono: '523314509981',
+      tipoAlerta: 'guia_despacho',
+      canal: 'evolution_api',
+      estatus: 'ENVIADO',
+      timestamp: '2026-11-19T10:15:00.000Z',
+      mensaje: '¡Hola Alondra (UDG Esports)! Tu producto R-LM360-WHDMMC-1 va en camino. Paquetería: DHL, Guía: DHL-9920148. Fecha acordada: 2026-11-25.'
+    },
+    {
+      id: 'log-2',
+      notaId: 'nota-2',
+      creador: 'Lazaro Capaldi',
+      telefono: '525539102844',
+      tipoAlerta: 'preventivo_3_dias',
+      canal: 'whatsapp_directo',
+      estatus: 'ENVIADO',
+      timestamp: '2026-11-20T11:30:00.000Z',
+      mensaje: '¡Hola Lazaro Capaldi! Te recordamos amablemente que tu fecha límite para publicar con DeepCool es este 2026-11-25. ¡Quedamos a la orden!'
+    }
+  ],
+  evolutionConfig: {
+    apiUrl: '',
+    apiKey: '',
+    instanceName: '',
+    autoSend: false
+  }
 };
 
 export function getDatabase() {
@@ -235,13 +265,23 @@ export function getDatabase() {
         proveedores: initialDatabase.proveedores,
         marcas: initialDatabase.marcas,
         creadores: initialDatabase.creadores,
-        notas: Array.isArray(parsed) ? parsed : initialDatabase.notas
+        notas: Array.isArray(parsed) ? parsed : initialDatabase.notas,
+        notificacionesLog: initialDatabase.notificacionesLog,
+        evolutionConfig: initialDatabase.evolutionConfig
       };
       saveDatabase(migrated);
       return migrated;
     }
     // Asegurar que cada nota tenga campo monto y comprobantePago
     let changed = false;
+    if (!Array.isArray(parsed.notificacionesLog)) {
+      parsed.notificacionesLog = initialDatabase.notificacionesLog;
+      changed = true;
+    }
+    if (!parsed.evolutionConfig) {
+      parsed.evolutionConfig = initialDatabase.evolutionConfig;
+      changed = true;
+    }
     parsed.notas.forEach((n, idx) => {
       if (n.monto === undefined) {
         n.monto = idx % 2 === 0 ? 2499 : 1899;

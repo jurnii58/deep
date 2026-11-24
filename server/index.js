@@ -442,7 +442,41 @@ app.post('/api/proveedores', (req, res) => {
   res.json({ ok: true, data: prov, proveedores: db.proveedores });
 });
 
-// 8. Endpoint exclusivo para n8n (público / webhook de consulta)
+// =======================================================
+// 8. MOTOR DE AUTOMATIZACIONES (WHATSAPP, n8n & EVOLUTION API)
+// =======================================================
+
+function formatTelefonoInternacional(tel) {
+  if (!tel) return '';
+  const digits = String(tel).replace(/\D/g, '');
+  if (digits.startsWith('52') && (digits.length === 12 || digits.length === 13)) return digits;
+  if (digits.length === 10) return `52${digits}`;
+  return digits;
+}
+
+function generarMensajeWhatsApp(nota, tipoAlerta) {
+  const creador = nota.destinatario || 'Creador(a)';
+  const producto = nota.producto || 'hardware DeepCool';
+  const fecha = nota.fechaLimite || 'la fecha acordada';
+  const guia = nota.guiaEnvio || 'En proceso';
+  const paqueteria = nota.paqueteria || 'Paquetería asignada';
+
+  if (tipoAlerta === 'guia_despacho') {
+    return `¡Hola ${creador}! Te saludamos del equipo de Marketing de DeepCool LATAM. Tu producto (${producto}) va en camino 📦\n\n• Paquetería: ${paqueteria}\n• Guía de rastreo: ${guia}\n• Fecha límite acordada para tu video: ${fecha}\n\nQuedamos atentos a cualquier duda con la entrega o el ensamble. ¡Mucho éxito con el contenido!`;
+  }
+  if (tipoAlerta === 'preventivo_3_dias') {
+    return `¡Hola ${creador}! Esperamos que estés disfrutando el ${producto} de DeepCool. Te recordamos amablemente que tu fecha límite para publicar la colaboración es este ${fecha} (faltan pocos días). Si requieres material gráfico oficial o spec sheets, avísanos con confianza. ¡Saludos!`;
+  }
+  if (tipoAlerta === 'vence_hoy') {
+    return `¡Hola ${creador}! Te saludamos de DeepCool LATAM. Hoy (${fecha}) es la fecha pactada para la publicación de tu contenido sobre ${producto}. Por favor, en cuanto tu video o post esté disponible, compártenos el enlace para registrar tu colaboración en nuestro sistema. ¡Muchas gracias!`;
+  }
+  if (tipoAlerta === 'vencido_retraso') {
+    return `Hola ${creador}, te escribimos de la Dirección de Marketing de DeepCool LATAM para dar seguimiento a la colaboración de ${producto}, cuya fecha estimada era el ${fecha}. ¿Tuviste algún contratiempo con la edición o necesitas apoyo adicional? Por favor compártenos una actualización para mantener tu perfil al día. ¡Quedamos atentos!`;
+  }
+  return `Hola ${creador}, te saludamos de DeepCool LATAM respecto a tu colaboración con el producto ${producto}. Quedamos atentos a tus comentarios.`;
+}
+
+// 8.1 Endpoint para n8n (público / webhook de consulta diaria)
 app.get('/api/n8n/pendientes', (req, res) => {
   const db = getDatabase();
   const hoy = new Date();
@@ -461,6 +495,10 @@ app.get('/api/n8n/pendientes', (req, res) => {
       else if (diffDias === 0) alerta = 'vence_hoy';
       else if (diffDias <= 3) alerta = 'preventivo_3_dias';
 
+      const telInternacional = formatTelefonoInternacional(n.telefono);
+      const mensajeTexto = generarMensajeWhatsApp(n, alerta);
+      const waUrl = telInternacional ? `https://wa.me/${telInternacional}?text=${encodeURIComponent(mensajeTexto)}` : '';
+
       return {
         id: n.id,
         marca: n.marca,
@@ -470,13 +508,224 @@ app.get('/api/n8n/pendientes', (req, res) => {
         medio: n.medio,
         creador: n.destinatario,
         telefono: n.telefono,
+        telefonoFormateado: telInternacional,
         fechaLimite: n.fechaLimite,
         diasRestantes: diffDias,
-        tipoAlerta: alerta
+        tipoAlerta: alerta,
+        guiaEnvio: n.guiaEnvio || '',
+        paqueteria: n.paqueteria || '',
+        mensajeWhatsApp: mensajeTexto,
+        waDirectUrl: waUrl
       };
     });
 
   res.json({ ok: true, total: pendientes.length, data: pendientes });
+});
+
+// 8.2 Registrar envío de notificación en el Log de Auditoría
+app.post('/api/automatizaciones/registrar-envio', (req, res) => {
+  const db = getDatabase();
+  const { notaId, creador, telefono, tipoAlerta, canal, mensaje } = req.body;
+
+  const nuevoLog = {
+    id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+    notaId: sanitizeText(notaId || '', 50),
+    creador: sanitizeText(creador || 'Creador', 100),
+    telefono: sanitizeText(telefono || '', 30),
+    tipoAlerta: sanitizeText(tipoAlerta || 'manual', 50),
+    canal: sanitizeText(canal || 'whatsapp_directo', 50),
+    estatus: 'ENVIADO',
+    mensaje: sanitizeText(mensaje || '', 1000),
+    timestamp: new Date().toISOString()
+  };
+
+  if (!Array.isArray(db.notificacionesLog)) {
+    db.notificacionesLog = [];
+  }
+
+  db.notificacionesLog.unshift(nuevoLog);
+  // Mantener últimos 100 logs
+  if (db.notificacionesLog.length > 100) {
+    db.notificacionesLog = db.notificacionesLog.slice(0, 100);
+  }
+
+  saveDatabase(db);
+  res.json({ ok: true, data: nuevoLog, total: db.notificacionesLog.length });
+});
+
+// 8.3 Obtener Historial de Auditoría de Notificaciones
+app.get('/api/automatizaciones/historial', (req, res) => {
+  const db = getDatabase();
+  res.json({ ok: true, data: db.notificacionesLog || [] });
+});
+
+// 8.4 Webhook Receptor de Evidencias de Video (n8n o Evolution API)
+app.post('/api/automatizaciones/webhook-entrega', (req, res) => {
+  const db = getDatabase();
+  const { telefono, linkEvidencia, notaId, mensajeOriginal } = req.body;
+
+  if (!linkEvidencia && !mensajeOriginal) {
+    return res.status(400).json({ ok: false, error: 'Se requiere linkEvidencia o mensaje' });
+  }
+
+  // Extraer URL si viene en mensajeOriginal
+  let urlDetectada = linkEvidencia;
+  if (!urlDetectada && typeof mensajeOriginal === 'string') {
+    const match = mensajeOriginal.match(/(https?:\/\/[^\s]+)/g);
+    if (match) urlDetectada = match[0];
+  }
+
+  if (!urlDetectada) {
+    return res.status(400).json({ ok: false, error: 'No se detectó ningún enlace web de video' });
+  }
+
+  const telBusqueda = telefono ? formatTelefonoInternacional(telefono) : '';
+
+  // Buscar nota candidata
+  let notaEncontrada = null;
+  if (notaId) {
+    notaEncontrada = (db.notas || []).find(n => n.id === notaId);
+  }
+  if (!notaEncontrada && telBusqueda) {
+    // Buscar la nota pendiente más antigua o reciente de ese creador
+    notaEncontrada = (db.notas || []).find(n =>
+      n.esCreador &&
+      n.estatusContenido !== 'Entregado' &&
+      formatTelefonoInternacional(n.telefono) === telBusqueda
+    );
+  }
+
+  if (!notaEncontrada) {
+    return res.status(404).json({
+      ok: false,
+      error: 'No se encontró una colaboración pendiente asociada a ese teléfono o notaId',
+      telefono: telBusqueda
+    });
+  }
+
+  notaEncontrada.estatusContenido = 'Entregado';
+  notaEncontrada.linkEvidencia = sanitizeText(urlDetectada, 500);
+
+  if (!Array.isArray(db.notificacionesLog)) db.notificacionesLog = [];
+  db.notificacionesLog.unshift({
+    id: `log-ev-${Date.now()}`,
+    notaId: notaEncontrada.id,
+    creador: notaEncontrada.destinatario,
+    telefono: notaEncontrada.telefono,
+    tipoAlerta: 'recepcion_video',
+    canal: 'webhook_n8n',
+    estatus: 'RECIBIDO',
+    mensaje: `Evidencia recibida y validada: ${urlDetectada}`,
+    timestamp: new Date().toISOString()
+  });
+
+  saveDatabase(db);
+  res.json({
+    ok: true,
+    message: '¡Video recibido y colaboración actualizada exitosamente a Entregado!',
+    nota: notaEncontrada
+  });
+});
+
+// 8.5 Configuración Evolution API
+app.get('/api/automatizaciones/config-evolution', (req, res) => {
+  const db = getDatabase();
+  res.json({ ok: true, data: db.evolutionConfig || {} });
+});
+
+app.post('/api/automatizaciones/config-evolution', (req, res) => {
+  const db = getDatabase();
+  const { apiUrl, apiKey, instanceName, autoSend } = req.body;
+
+  db.evolutionConfig = {
+    apiUrl: sanitizeText(apiUrl || '', 300).replace(/\/$/, ''),
+    apiKey: sanitizeText(apiKey || '', 200),
+    instanceName: sanitizeText(instanceName || '', 100),
+    autoSend: Boolean(autoSend)
+  };
+
+  saveDatabase(db);
+  res.json({ ok: true, data: db.evolutionConfig });
+});
+
+// 8.6 Disparo Directo vía Evolution API (En segundo plano)
+app.post('/api/automatizaciones/enviar-evolution', async (req, res) => {
+  const db = getDatabase();
+  const { notaId, tipoAlerta, mensajePersonalizado } = req.body;
+
+  const nota = (db.notas || []).find(n => n.id === notaId);
+  if (!nota) return res.status(404).json({ ok: false, error: 'Nota no encontrada' });
+
+  const config = db.evolutionConfig || {};
+  const mensajeFinal = mensajePersonalizado || generarMensajeWhatsApp(nota, tipoAlerta || 'vence_hoy');
+  const numeroLimpio = formatTelefonoInternacional(nota.telefono);
+
+  if (!config.apiUrl || !config.apiKey || !config.instanceName) {
+    // Si no está configurada la URL de Evolution API, registrar en log como SIMULACIÓN DE PRUEBA
+    const logItem = {
+      id: `log-${Date.now()}`,
+      notaId: nota.id,
+      creador: nota.destinatario,
+      telefono: nota.telefono,
+      tipoAlerta: tipoAlerta || 'manual',
+      canal: 'evolution_api (Modo Simulación / Prueba)',
+      estatus: 'ENVIADO',
+      mensaje: mensajeFinal,
+      timestamp: new Date().toISOString()
+    };
+    if (!Array.isArray(db.notificacionesLog)) db.notificacionesLog = [];
+    db.notificacionesLog.unshift(logItem);
+    saveDatabase(db);
+
+    return res.json({
+      ok: true,
+      simulado: true,
+      message: 'Mensaje registrado en log (Evolution API no configurada aún, operando en modo prueba)',
+      data: logItem
+    });
+  }
+
+  try {
+    const url = `${config.apiUrl}/message/sendText/${config.instanceName}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': config.apiKey
+      },
+      body: JSON.stringify({
+        number: numeroLimpio,
+        options: { delay: 1000, presence: 'composing', linkPreview: false },
+        textMessage: { text: mensajeFinal }
+      })
+    });
+
+    const result = await response.json().catch(() => ({}));
+
+    const logItem = {
+      id: `log-${Date.now()}`,
+      notaId: nota.id,
+      creador: nota.destinatario,
+      telefono: nota.telefono,
+      tipoAlerta: tipoAlerta || 'manual',
+      canal: 'evolution_api',
+      estatus: response.ok ? 'ENVIADO' : 'ERROR',
+      mensaje: mensajeFinal,
+      timestamp: new Date().toISOString()
+    };
+
+    if (!Array.isArray(db.notificacionesLog)) db.notificacionesLog = [];
+    db.notificacionesLog.unshift(logItem);
+    saveDatabase(db);
+
+    return res.json({
+      ok: response.ok,
+      result,
+      data: logItem
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: 'Error comunicando con Evolution API: ' + err.message });
+  }
 });
 
 // Servir frontend compilado
